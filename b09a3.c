@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <signal.h>
 #include <sys/utsname.h>
 #include <unistd.h>
 #include <sys/resource.h>
@@ -7,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/sysinfo.h>
+#include <errno.h>
 
 void return_system_information(){
     /*
@@ -200,8 +202,7 @@ void get_session_info(){
             printf(" %s       %s (%s)\n", user_info->ut_user, user_info->ut_line, user_info->ut_host);}
     }
     free(user_info);
-    endutent();
-    printf("---------------------------------------\n");}
+    endutent();}
 
 
 void cal_per(float a, float b, char *new){
@@ -350,9 +351,11 @@ void number_of_cores(){
     //Return the number of cores in our Machine
     /*
     sysconf - get configuration information at run time
-    _SC_NPROCESSORS_CONF: It gives the information about total procesors which are online
+    _SC_NPROCESSORS_CONF: It gives the information about total processes which are online in the machine
+    _SC_NPROCESSORS_ONLN: It gives the information about total cores which are online in the machine
     */
-    printf("Number of cores: %ld\n", sysconf(_SC_NPROCESSORS_CONF));
+    printf("---------------------------------------\n");
+    printf("Number of cores: %ld\n", sysconf(_SC_NPROCESSORS_ONLN));
     }
 
 
@@ -519,19 +522,28 @@ void call_system(int N, int T, int user, int system, int sequence, int graphic)
 }
 void call_sequence(int N, int T, int user, int system, int sequence, int graphic)
 {
+    float k = 0;
+    float *z1 = &k;
+    float matrix[N];
+    *z1 = find_cpu_usage(T);
+            if(*z1 < 0) *z1 = -*z1;
+    char store[N][1024];
+    for(int i = 0; i < N; i++){
+        strcpy(store[i], "\n");
+    }
     //increament of k to avoid reduplcation  of code
     //acceptance of the command arguements
     char info_array[N][1024];
     for(int i = 0; i < N; i++){
         strcpy(info_array[i], "\n");
     }
-    printf("\033[2J"); // Clear the screen
+    printf("\033[2J"); // C`lear the screen
     printf("\033[%d;%dH", 0, 0); // Move cursor back to top-left corner
 
     //memory usage for dsiplay stored in variable for later use
     int mem_usage = memory_usage();
-    float k = 0;
-    float *z = &k;
+    float ke = 0;
+    float *z = &ke;
 
     for(int i = 0; i < N; i++){
         for(int i = 0; i < N; i++){
@@ -539,18 +551,32 @@ void call_sequence(int N, int T, int user, int system, int sequence, int graphic
         }
         if(*z < 0) *z = -*z;
         //To show the current itteration number, it goes uptill N-1
+        printf("---------------------------------------\n");
         printf(">>> iteration %d\n", i);
         //use of memory_usage
         printf(" Memory usage: %d kilobytes\n", mem_usage);
-        printf("---------------------------------------\n");
+        if(user == 0){
+            printf("---------------------------------------\n");
+            if(graphic == 0){
         printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");  
         get_cpu_utilization_2(N, T, info_array, i);
         for(int i = 0; i < N; i++){
-            printf("%s", info_array[i]);}
+            printf("%s", info_array[i]);}}
+        else{
+            printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n"); 
+            for(int i = 0; i < N; i++){
+            strcpy(info_array[i], "\n");}
+            get_cpu_utilization(N, T, info_array, i, matrix);
+
+            for(int i = 0; i < N; i++){
+            printf("%s", info_array[i]);
+        }
+        }
+            
         //Session/user information part
         /*
         Returns the information about all the user and the sessions  for this machine
-        */
+        */}
         if(system == 0){
         get_session_info();}
         //Core number and CPU usage part
@@ -558,14 +584,63 @@ void call_sequence(int N, int T, int user, int system, int sequence, int graphic
         Returns the number of cores present in our machine
         */
         number_of_cores();
+        if(graphic == 0){
         if(*z < 0) *z = -*z;
         printf(" total cpu use = %.2f%%\n", *z);
         /*
         Returns the total cpu usage for the system
         */
-        *z = find_cpu_usage(T);}
-        if(user == 0){
-        return_system_information();}
+        *z = find_cpu_usage(T);
+        if(*z < 0) *z = -*z;}
+        else{
+                            if(*z < 0) *z = -*z;
+        printf(" total cpu use = %.2f%%\n", *z);
+
+        //set-up for the cpu utilization method
+        char storage[1024] = "";
+        char value[1024] = "";
+        char x[28] = "";
+                    if(*z <= 0) *z = -*z;
+
+        strcat(x, "         |");
+        sprintf(value, "%.2f", *z);
+        strcat(x, storage);
+
+        //Case when i equals 0 so we'll consider it as a base case and will represent the thing by a mark 
+        if(i == 0){
+            graphic_for_cpu_2(*z, 0, x);
+        }
+        if(i == 1){
+            graphic_for_cpu_2(*z, 0, x);
+        }
+        
+        //Case when i not equals 0 so we'll have the cpu_usage value of previous function
+        /*
+        Prev represents the cpu usage from previous itteration and z represent of current itteration
+        */
+                        if(*z < 0) *z = -*z;
+        if(i > 1){
+                if(*z <=0) *z = -*z;
+        graphic_for_cpu_2(*z, 0, x);}
+
+        for(int y = 0; y < i; y++){
+        strcpy(store[y], "\n");}
+
+        strcat(x, value);
+        strcat(x, "\n");
+        strcpy(store[i], x);
+
+        //Itteration through every itteration where cpu usage of every itteration is stored
+        for(int y = 0; y <= i; y++){
+        printf("%s", store[y]);}
+        
+        /*
+        Returns the total cpu usage for the system
+        */
+        *z = find_cpu_usage(T);
+        }
+        }
+        return_system_information();
         //sleeping for T seconds
 }
 
@@ -590,6 +665,7 @@ void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
         printf("\033[%d;%dH", 0, 0); // Move cursor back to top-left corner
         printf("Nbr of samples: %d -- every %d secs\n", N, T);
         printf(" Memory usage: %d kilobytes\n", mem_usage);
+        if(user == 0){
         printf("---------------------------------------\n");
         printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");  
 
@@ -597,13 +673,25 @@ void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
         get_cpu_utilization(N, T, info_array, i, matrix);
 
         for(int i = 0; i < N; i++){
-            printf("%s", info_array[i]);}
+            printf("%s", info_array[i]);}}
+        if(user == 1 && system == 1){{
+        printf("---------------------------------------\n");
+        printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");  
+
+        //Returns the memory used in Phys.Used/Tot -- Virtual Used/Tot format
+        get_cpu_utilization(N, T, info_array, i, matrix);
+
+        for(int i = 0; i < N; i++){
+            printf("%s", info_array[i]);}}  
+        }
 
         //Session/user information part
         /*
         Returns the information about all the user and the sessions  for this machine
         */
-       if(system == 0){
+       if(system == 0 && user == 1){
+        get_session_info();}
+       if(system == 1 && user == 1){
         get_session_info();}
         
         //Core number and CPU usage part
@@ -668,7 +756,7 @@ void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
     /*
     Return the information about the machine's name, version, release and achitecture 
     */
-   if(user == 0) return_system_information();
+   return_system_information();
 }
 
 void call_for_nothing(int N, int T, int user, int system, int sequence, int graphic){
@@ -713,6 +801,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
         /*
         Returns the total cpu usage for the system
         */
+        *z = find_cpu_usage(T);
         if(*z < 0) *z = -*z;
         printf(" total cpu use = %.2f%%\n", *z);
         //Updation of the value of CPU usage so that it can be used in next itteration
@@ -730,24 +819,63 @@ void call_function(int N, int T, int user, int system, int sequence, int graphic
     This function is called by the main function
     It's the main function*/
     if(user == 1){
-        call_user(N, T, user, system, sequence, graphic);
+        if(sequence == 0 && system == 0 && graphic == 0){
+        call_user(N, T, user, system, sequence, graphic);}
     }
     if(system == 1){
-        call_system(N, T, user, system, sequence, graphic);
+        if(sequence == 0 && user == 0 && graphic == 0){
+        call_system(N, T, user, system, sequence, graphic);}
     }
     if(sequence == 1){
-        call_sequence(N, T, user, system, sequence, graphic);
+        int k = 0;
+        if(user == 1 && system == 1) k++;
+        if(k == 0){
+        call_sequence(N, T, user, system, sequence, graphic);}
+        if(k!=0){
+            user  = 0;
+            system = 0;
+            call_sequence(N, T, user, system, sequence, graphic);
+            exit(0);
+        }
     }
-    if(graphic == 1){
+    if(graphic == 1 && sequence != 1){
         call_graphic(N, T, user, system, sequence, graphic);
     }
-    if(user == 0 && system == 0 && sequence == 0 && graphic == 0){
+    if((user == 0 && system == 0 && sequence == 0 && graphic == 0) || (user == 1 && system == 1 && sequence == 0 && graphic == 0)){
         call_for_nothing(N, T, user, system, sequence, graphic);
     }
 }
 
+// Define signal handlers
+void sigint_handler(int signum) {
+    // Handle the Ctrl-C signal
+    // Ask the user if they want to quit
+    // If yes, then exit the program
+    // If no, then continue the program
+    // As per the assignment, we should ask the user if they want to quit
+    char choice;
+    printf("Are you sure, you want to quit? (y/n) ");
+    scanf(" %c", &choice);
+    if (choice == 'y' || choice == 'Y' || strcmp(&choice,"yes") == 0 || strcmp(&choice, "Yes") == 0) {
+        exit(0);
+    }
+}
+
+void sigtstp_handler(int signum) {
+    // Ignore the Ctrl-Z signal
+    // As per the assignment, we should ignore this signal
+    return;
+}
+
 int main(int argc, char *argv[])
-{
+{   
+    // Register signal handlers
+    /*
+    The below two lines of code are used to handle the signals
+    */
+    signal(SIGINT, sigint_handler);//SIGINT is the signal for Ctrl-C
+    signal(SIGTSTP, sigtstp_handler);//SIGTSTP is the signal for Ctrl-Z
+
     int N = 10;
     int T = 1;
     
@@ -779,11 +907,10 @@ int main(int argc, char *argv[])
         for(int i = 0; i < argc; i++){
         if(strcmp(argv[i], "--system") == 0) system = 1;
         if(strcmp(argv[i], "--user") == 0) user = 1;
-        if(strcmp(argv[i], "--graphics") == 0) graphic = 1;
+        if(strcmp(argv[i], "--graphics") == 0 || strcmp(argv[i], "-g") == 0) graphic = 1;
         if(strcmp(argv[i], "--sequential") == 0) sequence = 1;
         }
     }
-    
     call_function(N, T, user, system, sequence, graphic);
     return 0;
 }
