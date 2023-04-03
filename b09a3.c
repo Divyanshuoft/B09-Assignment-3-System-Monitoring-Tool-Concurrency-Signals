@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <sys/sysinfo.h>
 #include <errno.h>
+#include <sys/wait.h>
 
 void return_system_information(){
     /*
@@ -759,59 +760,98 @@ void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
    return_system_information();
 }
 
-void call_for_nothing(int N, int T, int user, int system, int sequence, int graphic){
-    int mem_usage = memory_usage();
-    // //Set-up for the system 
-    float k = 0;
-    float *z = &k;
+// void find_memory_usage(int N, int T, int user, int system, int sequence, int graphic){
+//     char info_array[N][1024];
+//     for(int i = 0; i < N; i++){
+//         strcpy(info_array[i], "\n");
+//     }
+//     int mem_usage = memory_usage();
+//     printf("\033[2J"); // Clear the screen
+//     printf("\033[%d;%dH", 0, 0); // Cursor goes to top-left
+//     printf("Nbr of samples: %d -- every %d secs\n", N, T);
+//     printf(" Memory usage: %d kilobytes\n", mem_usage);
+//     printf("---------------------------------------\n");
+//     printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");
+// }
+
+void call_for_nothing(int N, int T, int user, int system, int sequence, int graphic, char info_array[N][1024]) {
+    for (int i = 0; i < N; i++) {
+        // Memory usage process
+        pid_t pid_mem = fork();
+        if (pid_mem == 0) {
+            // Child process for memory usage
+            int mem_usage = memory_usage();
+            printf("\033[2J"); // Clear the screen
+            printf("\033[%d;%dH", 0, 0); // Cursor goes to top-left
+            printf("Itteration: %d\n", i);
+            printf("Nbr of samples: %d -- every %d secs\n", N, T);
+            printf(" Memory usage: %d kilobytes\n", mem_usage);
+            printf("---------------------------------------\n");
+            printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");
+
+            // Store the value of i as the element at index i in info_array
+            sprintf(info_array[i], "Itteration %c: Memory usage: %d kilobytes\n", '0'+i, mem_usage);
+            // Print the previous results
+            for (int j = 0; j <= i; j++) {
+                printf("%s", info_array[j]);
+            }
+
+            exit(0);
+        } else if (pid_mem < 0) {
+            // Error occurred
+            perror("fork");
+            exit(1);
+        }
+
+        // User session information process
+        pid_t pid_sess = fork();
+        if (pid_sess == 0) {
+            // Child process for user session information
+            get_session_info();
+            number_of_cores();
+            exit(0);
+        } else if (pid_sess < 0) {
+            // Error occurred
+            perror("fork");
+            exit(1);
+        }
+
+        // CPU usage process
+        pid_t pid_cpu = fork();
+        if (pid_cpu == 0) {
+            // Child process for CPU usage
+            float cpu_usage = find_cpu_usage(T);
+            if(cpu_usage < 0) cpu_usage = -cpu_usage;
+            printf(" total CPU usage: %.2f%%\n", cpu_usage);
+            exit(0);
+        } else if (pid_cpu < 0) {
+            // Error occurred
+            perror("fork");
+            exit(1);
+        }
+
+        // Wait for child processes to finish
+        int status;
+        waitpid(pid_mem, &status, 0);
+        waitpid(pid_sess, &status, 0);
+        waitpid(pid_cpu, &status, 0);
+
+        // Sleep for T seconds
+        sleep(T);
+    }
+
+    // System information
+}
+
+
+
+void normal_execution(int N, int T, int user, int system, int sequence, int graphic){
     char info_array[N][1024];
     for(int i = 0; i < N; i++){
         strcpy(info_array[i], "\n");
     }
-    for(int i = 0; i < N; i++){
-        
-        if(*z < 0) *z = -*z;
-        //Print statements for the headline part
-        printf("\033[2J"); // Clear the screen
-        printf("\033[%d;%dH", 0, 0); // Cursor goes to top-left
-        printf("Nbr of samples: %d -- every %d secs\n", N, T);
-        printf(" Memory usage: %d kilobytes\n", mem_usage);
-        printf("---------------------------------------\n");
-        printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");  
-
-        //Returns the memory used in Phys.Used/Tot -- Virtual Used/Tot format
-        
-        get_cpu_utilization_2(N, T, info_array, i);
-        
-        //Itterating through the values of memory usage 
-        for(int i = 0; i < N; i++){
-            printf("%s", info_array[i]);}
-
-        //Session/user information part
-        /*
-        Returns the information about all the user and the sessions  for this machine
-        */
-        get_session_info();
-
-        //Core number and CPU usage part
-        /*
-        Returns the number of cores present in our machine
-        */
-        number_of_cores();
-        /*
-        Returns the total cpu usage for the system
-        */
-        *z = find_cpu_usage(T);
-        if(*z < 0) *z = -*z;
-        printf(" total cpu use = %.2f%%\n", *z);
-        //Updation of the value of CPU usage so that it can be used in next itteration
-        *z = find_cpu_usage(T);
-            if(*z < 0) *z = -*z;}
-    //System Information part
-    /*
-    Return the information about the machine's name, version, release and achitecture 
-    */
-    return_system_information();
+    call_for_nothing(N, T, user, system, sequence, graphic, info_array);
+    return_system_information();    
 }
 
 void call_function(int N, int T, int user, int system, int sequence, int graphic){
@@ -842,7 +882,7 @@ void call_function(int N, int T, int user, int system, int sequence, int graphic
         call_graphic(N, T, user, system, sequence, graphic);
     }
     if((user == 0 && system == 0 && sequence == 0 && graphic == 0) || (user == 1 && system == 1 && sequence == 0 && graphic == 0)){
-        call_for_nothing(N, T, user, system, sequence, graphic);
+        normal_execution(N, T, user, system, sequence, graphic);
     }
 }
 
@@ -864,6 +904,7 @@ void sigint_handler(int signum) {
 void sigtstp_handler(int signum) {
     // Ignore the Ctrl-Z signal
     // As per the assignment, we should ignore this signal
+    printf("Ctrl + Z is ignored\n"); 
     return;
 }
 
