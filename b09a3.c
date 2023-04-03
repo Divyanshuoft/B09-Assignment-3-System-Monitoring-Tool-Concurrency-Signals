@@ -783,16 +783,17 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             int mem_usage = memory_usage();
             printf("\033[2J"); // Clear the screen
             printf("\033[%d;%dH", 0, 0); // Cursor goes to top-left
-            printf("Itteration: %d\n", i);
-            printf("Nbr of samples: %d -- every %d secs\n", N, T);
-            printf(" Memory usage: %d kilobytes\n", mem_usage);
+            printf("Iteration: %d\n", i);
+            printf("Number of samples: %d -- every %d secs\n", N, T);
+            printf("Memory usage: %d kilobytes\n", mem_usage);
             printf("---------------------------------------\n");
             printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");
 
             // Store the value of i as the element at index i in info_array
-            sprintf(info_array[i], "Itteration %c: Memory usage: %d kilobytes\n", '0'+i, mem_usage);
+
+            get_cpu_utilization_2(N, T, info_array, i);
             // Print the previous results
-            for (int j = 0; j <= i; j++) {
+            for (int j = 0; j < N; j++) {
                 printf("%s", info_array[j]);
             }
 
@@ -821,28 +822,25 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
         if (pid_cpu == 0) {
             // Child process for CPU usage
             float cpu_usage = find_cpu_usage(T);
-            if(cpu_usage < 0) cpu_usage = -cpu_usage;
-            printf(" total CPU usage: %.2f%%\n", cpu_usage);
+            if (cpu_usage < 0) {
+                cpu_usage = -cpu_usage;
+            }
+            printf("Total CPU usage: %.2f%%\n", cpu_usage);
             exit(0);
         } else if (pid_cpu < 0) {
             // Error occurred
             perror("fork");
             exit(1);
         }
-
         // Wait for child processes to finish
         int status;
         waitpid(pid_mem, &status, 0);
         waitpid(pid_sess, &status, 0);
         waitpid(pid_cpu, &status, 0);
-
         // Sleep for T seconds
         sleep(T);
     }
-
-    // System information
 }
-
 
 
 void normal_execution(int N, int T, int user, int system, int sequence, int graphic){
