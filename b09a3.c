@@ -775,18 +775,23 @@ void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
 // }
 
 void call_for_nothing(int N, int T, int user, int system, int sequence, int graphic, char info_array[N][1024]) {
+    char cup_storage[N][1024];
+    for(int hg = 0; hg < N; hg++){
+        strcpy(info_array[hg], "\n");
+    }
     for (int i = 0; i < N; i++) {
         int memory_fd[2]; // file descriptors for the pipe  
         int session_fd[2]; // file descriptors for the pipe  
-        int cpu_fd[2]; // file descriptors for the pipe  
+        int cpu_fd[2]; // file descriptors for the pipe
+        char temp[1024]; 
         int status;
         // Create the pipe
         if (pipe(memory_fd) == -1 || pipe(session_fd) == -1 || pipe(cpu_fd) == -1) {
             perror("pipe");
-            return;
-        }
+            return;}
 
-        char temp[1024];
+
+        //FORK 1
         // Memory usage process
         pid_t pid_mem = fork();
         if (pid_mem == 0) {
@@ -803,11 +808,11 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             // get_cpu_utilization_2(N, T, info_array, i);
             // strcpy(temp, info_array[i]);
             char buf[1024];
-            for (int j = 0; j < N; j++) {
-                printf("%s", info_array[j]);
-            }
-
             ssize_t n = read(memory_fd[0], buf, sizeof(buf)); // read from the pipe
+            strcpy(info_array[i], buf);
+            for(int k = 0; k < N; k++){
+                printf("%s", info_array[k]);
+            }
             if (n == -1) {
                 perror("read");
                 exit(1);
@@ -822,7 +827,6 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             // Parent process
             close(memory_fd[0]); // close the read end of the pipe
             get_cpu_utilization_2(N, T, info_array, i);
-            strcpy(temp, info_array[i]);
             ssize_t n = write(memory_fd[1], temp, sizeof(temp)); // write to the pipe
             if (n == -1) {
                 perror("write");
@@ -830,7 +834,10 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             }
             close(memory_fd[1]); // close the write end of the pipe
         }
-        waitpid(pid_mem, &status, 0);
+        while(wait(NULL) > 0);
+
+
+        //FORK 2
         // User session information process
         pid_t pid_sess = fork();
         if (pid_sess == 0) {
@@ -845,18 +852,18 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             perror("fork");
             exit(1);
         }
-        waitpid(pid_sess, &status, 0);
+        // Wait for child processes to finish
+        while(wait(NULL) > 0);
+        //FORK 3
         // CPU usage process
         pid_t pid_cpu;
         pid_cpu = fork();
         if (pid_cpu == 0) {
             // Child process for CPU usage
             close(cpu_fd[1]); // close the write end of the pipe
-            float cpu_usage = find_cpu_usage(T);
-            if (cpu_usage < 0) {
-                cpu_usage = -cpu_usage;
-            }
-            printf(" total CPU usage: %.2f%%\n", cpu_usage);
+            char buf[1024];
+            ssize_t n = read(cpu_fd[0], buf, sizeof(buf)); // read from the pipe
+            printf(" total cpu usage: %s\n", buf);
             exit(0);
         } else if (pid_cpu < 0) {
             // Error occurred
@@ -869,7 +876,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             if (cpu_usage < 0) {
                 cpu_usage = -cpu_usage;
             }
-            sprintf(cpu, " total CPU usage: %.2f%%", cpu_usage);
+            sprintf(cpu, "%.2f", cpu_usage);
             close(cpu_fd[0]); // close the read end of the pipe
             ssize_t n = write(cpu_fd[1], cpu, sizeof(cpu)); // write to the pipe
             if (n == -1) {
@@ -879,9 +886,8 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             close(cpu_fd[1]); // close the write end of the pipe
         }
     close(session_fd[1]); // close the write end of the pipe
-
     // Wait for child processes to finish
-    waitpid(pid_cpu, &status, 0);
+    while(wait(NULL) > 0);
 
     // Sleep for T seconds
     sleep(T);
