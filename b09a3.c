@@ -147,7 +147,7 @@ float subtract_after_sleep(float *c, float *a, float *s, int zz) {
     get the relative differnce betwen the two
     */
     //The program refreshes for T duration
-    sleep(zz);
+    usleep(zz * 500000); // sleep for half a second
      s[0] = 0;
    
     //Updation of the value takes place here
@@ -156,7 +156,7 @@ float subtract_after_sleep(float *c, float *a, float *s, int zz) {
 
     //returning the realtive value
     float num = 1000*(*c-*a);
-    float den = s[1] - s[0] + 1;
+    float den = s[1] - s[0];
     float k = num/den;
     return k/10;
 }
@@ -205,6 +205,28 @@ void get_session_info(){
     free(user_info);
     endutent();}
 
+void get_session_info2(char cpu[2][1024]){
+    /*
+    The utmp pointer consists of the following fields,
+    ut_line for the Device name
+    ut_id for the Terminal name
+    ut_user for the Username
+    ut_host for the Hostname    
+    */
+    struct utmp *user_info;
+    setutent();
+    char username[1024] = "---------------------------------------\n### Sessions/users ###\n";
+    while ((user_info = getutent())) {
+        if (user_info->ut_type == USER_PROCESS) {
+            char line[1024];
+            sprintf(line, " %s       %s (%s)\n", user_info->ut_user, user_info->ut_line, user_info->ut_host);
+            strcat(username, line);
+        }
+    }
+    strcpy(cpu[0], username);
+    free(user_info);
+    endutent();
+}
 
 void cal_per(float a, float b, char *new){
     /*
@@ -348,16 +370,32 @@ void get_cpu_utilization(int N, int T, char array[N][1024], int index, float mat
     strcpy(array[index], string);
     }
 
-void number_of_cores(){
-    //Return the number of cores in our Machine
-    /*
-    sysconf - get configuration information at run time
-    _SC_NPROCESSORS_CONF: It gives the information about total processes which are online in the machine
-    _SC_NPROCESSORS_ONLN: It gives the information about total cores which are online in the machine
-    */
-    printf("---------------------------------------\n");
-    printf("Number of cores: %ld\n", sysconf(_SC_NPROCESSORS_ONLN));
-    }
+void number_of_cores() {
+    char result[100];  // Create a buffer to hold the concatenated string
+    int len = 0;       // Initialize the length to 0
+
+    // Append the first line to the result string
+    len += sprintf(result+len, "---------------------------------------\n");
+
+    // Append the second line, which includes the number of cores
+    len += sprintf(result+len, "Number of cores: %ld\n", sysconf(_SC_NPROCESSORS_ONLN));
+
+    // Print the result string
+    printf("%s", result);
+}
+
+void number_of_cores2(char cpu[2][1024]) {
+    char result[100];  // Create a buffer to hold the concatenated string
+    int len = 0;       // Initialize the length to 0
+    strcpy(result, "");
+    // Append the first line to the result string
+
+    // Append the second line, which includes the number of cores
+    len += sprintf(result+len, "%ld\n", sysconf(_SC_NPROCESSORS_ONLN));
+
+    // Print the result string
+    strcpy(cpu[0], result);
+}
 
 
 void get_cpu_utilization_2(int N, int T, char array[N][1024], int index){ 
@@ -838,14 +876,16 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
         while(wait(NULL) > 0);
 
 
+        
         //FORK 2
         // User session information process
         pid_t pid_sess = fork();
         if (pid_sess == 0) {
             // Child process for user session information
             close(session_fd[1]); // close the write end of the pipe
-            get_session_info();
-            number_of_cores();
+            char buf[1024];
+            ssize_t n = read(session_fd[0], buf, sizeof(buf)); // read from the pipe
+            printf("%s\n", buf);
             close(session_fd[0]); // close the read end of the pipe
             exit(0);
         } else if (pid_sess < 0) {
@@ -853,8 +893,25 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             perror("fork");
             exit(1);
         }
-        // Wait for child processes to finish
+        else{
+            close(session_fd[0]);
+            char cpu[2][1024];
+            strcpy(cpu[0], "");
+            strcpy(cpu[1], "");
+            get_session_info2(cpu);
+            char x[1024];
+            strcpy(x, "");
+            strcpy(x, cpu[0]);
+            strcat(x, "--------------------------------------");
+            ssize_t n = write(session_fd[1], x, sizeof(x)); // write to the pipe
+            if (n == -1) {
+                perror("write");
+            }
+            close(session_fd[1]); // close the write end of the pipe
+        }
         while(wait(NULL) > 0);
+        
+        
         //FORK 3
         // CPU usage process
         pid_t pid_cpu;
@@ -864,7 +921,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             close(cpu_fd[1]); // close the write end of the pipe
             char buf[1024];
             ssize_t n = read(cpu_fd[0], buf, sizeof(buf)); // read from the pipe
-            printf(" total cpu usage: %s\n", buf);
+            printf(" total cpu usage: %s%%\n", buf);
             exit(0);
         } else if (pid_cpu < 0) {
             // Error occurred
@@ -873,9 +930,17 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
         } else {
             // Parent process
             char cpu[50];
+            char x[2][1024];
+            strcpy(x[0], "");
+            strcpy(x[1], "");
+            number_of_cores2(x);
+            printf("Number of cores: %s", x[0]);
             float cpu_usage = find_cpu_usage(T);
             if (cpu_usage < 0) {
                 cpu_usage = -cpu_usage;
+            }
+            if (cpu_usage == -0) {
+                cpu_usage = 0;
             }
             sprintf(cpu, "%.2f", cpu_usage);
             close(cpu_fd[0]); // close the read end of the pipe
@@ -886,12 +951,10 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             }
             close(cpu_fd[1]); // close the write end of the pipe
         }
-    close(session_fd[1]); // close the write end of the pipe
     // Wait for child processes to finish
     while(wait(NULL) > 0);
-
     // Sleep for T seconds
-    sleep(T);
+    usleep(T * 500000); // sleep for half a second
     }
 }
 
