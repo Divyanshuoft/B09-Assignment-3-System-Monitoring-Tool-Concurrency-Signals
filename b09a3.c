@@ -405,7 +405,7 @@ void get_cpu_utilization_2(int N, int T, char array[N][1024], int index){
     char tot_phy_mem_string[128];
     char tot_vir_mem_string[128];
     char string[128];
-
+    strcpy(string, "");
     //All the numbers which are requied note: all in float form
     float phy_mem = used_memory_3 / (1024 * 1024 * 1024);
     float vir_mem = used_memory_4 / (1024 * 1024 * 1024);
@@ -856,7 +856,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             if (cpu_usage < 0) {
                 cpu_usage = -cpu_usage;
             }
-            printf("Total CPU usage: %.2f%%\n", cpu_usage);
+            printf(" total CPU usage: %.2f%%\n", cpu_usage);
             exit(0);
         } else if (pid_cpu < 0) {
             // Error occurred
@@ -869,7 +869,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             if (cpu_usage < 0) {
                 cpu_usage = -cpu_usage;
             }
-            sprintf(cpu, "Total CPU usage: %.2f%%", cpu_usage);
+            sprintf(cpu, " total CPU usage: %.2f%%", cpu_usage);
             close(cpu_fd[0]); // close the read end of the pipe
             ssize_t n = write(cpu_fd[1], cpu, sizeof(cpu)); // write to the pipe
             if (n == -1) {
@@ -878,17 +878,6 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             }
             close(cpu_fd[1]); // close the write end of the pipe
         }
-
-    // Parent process
-    // Write to the session_fd pipe
-    char session_info[1024];
-    get_session_info();
-    snprintf(session_info, sizeof(session_info), "### Session ### (%s)\n", "Hello World");
-    ssize_t n = write(session_fd[1], session_info, sizeof(session_info));
-    if (n == -1) {
-        perror("write");
-        return;
-    }
     close(session_fd[1]); // close the write end of the pipe
 
     // Wait for child processes to finish
