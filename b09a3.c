@@ -827,6 +827,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             // Parent process
             close(memory_fd[0]); // close the read end of the pipe
             get_cpu_utilization_2(N, T, info_array, i);
+            strcpy(temp, info_array[i]);
             ssize_t n = write(memory_fd[1], temp, sizeof(temp)); // write to the pipe
             if (n == -1) {
                 perror("write");
