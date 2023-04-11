@@ -873,7 +873,6 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             }
             close(memory_fd[1]); // close the write end of the pipe
         }
-        while(wait(NULL) > 0);
 
 
         
@@ -894,6 +893,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             exit(1);
         }
         else{
+            waitpid(pid_mem, NULL, 0);
             close(session_fd[0]);
             char cpu[2][1024];
             strcpy(cpu[0], "");
@@ -909,7 +909,6 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             }
             close(session_fd[1]); // close the write end of the pipe
         }
-        while(wait(NULL) > 0);
         
         
         //FORK 3
@@ -929,6 +928,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             exit(1);
         } else {
             // Parent process
+            waitpid(pid_sess, NULL, 0);
             char cpu[50];
             char x[2][1024];
             strcpy(x[0], "");
@@ -951,6 +951,7 @@ void call_for_nothing(int N, int T, int user, int system, int sequence, int grap
             }
             close(cpu_fd[1]); // close the write end of the pipe
         }
+        waitpid(pid_cpu, NULL, 0);
     // Wait for child processes to finish
     while(wait(NULL) > 0);
     // Sleep for T seconds
