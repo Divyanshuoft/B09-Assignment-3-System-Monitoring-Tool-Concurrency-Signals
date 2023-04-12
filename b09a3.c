@@ -608,8 +608,8 @@ void call_sequence(int N, int T, int user, int system, int sequence, int graphic
     int cpu_fd[2]; // file descriptors for the pipe
     char temp[1024]; 
     int status;
-    *z1 = find_cpu_usage(T);
-            if(*z1 < 0) *z1 = -*z1;
+    // *z1 = find_cpu_usage(T);
+    //         if(*z1 < 0) *z1 = -*z1;
     char store[N][1024];
     for(int i = 0; i < N; i++){
         strcpy(store[i], "\n");
@@ -635,9 +635,6 @@ void call_sequence(int N, int T, int user, int system, int sequence, int graphic
             strcpy(info_array[i], "\n");
         }
         if(*z < 0) *z = -*z;
-        printf("\033[2J"); // C`lear the screen
-        printf("\033[%d;%dH", 0, 0); // Move cursor back to top-left corner
-
         //To show the current itteration number, it goes uptill N-1
         printf("---------------------------------------\n");
         printf(">>> iteration %d\n", i);
@@ -660,7 +657,7 @@ void call_sequence(int N, int T, int user, int system, int sequence, int graphic
             char buf[1024];
             ssize_t n = read(memory_fd[0], buf, sizeof(buf)); // read from the pipe
             for(int k = 0; k < N; k++){
-                strcpy(info_array[k], "");
+                strcpy(info_array[k], "\n");
             }
             strcpy(info_array[i], buf);
             for(int k = 0; k < N; k++){
@@ -791,8 +788,8 @@ void call_sequence(int N, int T, int user, int system, int sequence, int graphic
         char storage[1024] = "";
         char value[1024] = "";
         char x[28] = "";
-                    if(*z <= 0) *z = -*z;
-
+            if(*z <= 0) *z = -*z;
+            if(*z == -0) *z = 0;
         strcat(x, "         |");
         sprintf(value, "%.2f", *z);
         strcat(x, storage);
@@ -810,17 +807,16 @@ void call_sequence(int N, int T, int user, int system, int sequence, int graphic
         Prev represents the cpu usage from previous itteration and z represent of current itteration
         */
                         if(*z < 0) *z = -*z;
+                        if(*z == -0) *z = 0;
         if(i > 1){
                 if(*z <=0) *z = -*z;
+                if(*z == -0) *z = 0;
         graphic_for_cpu_2(*z, 0, x);}
-
-        for(int y = 0; y < i; y++){
-        strcpy(store[y], "\n");}
 
         strcat(x, value);
         strcat(x, "\n");
         strcpy(store[i], x);
-
+        printf("%s", store[i]);
         //Itteration through every itteration where cpu usage of every itteration is stored
         for(int y = 0; y <= i; y++){
         printf("%s", store[y]);}
@@ -839,11 +835,16 @@ void call_sequence(int N, int T, int user, int system, int sequence, int graphic
 void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
 {
     float b = 0;
-            int mem_usage = memory_usage();
+    int memory_fd[2]; // file descriptors for the pipe  
+    int session_fd[2]; // file descriptors for the pipe  
+    int cpu_fd[2]; // file descriptors for the pipe
+    char temp[1024]; 
+    int status;
+    int mem_usage = memory_usage();
     float *z = &b;
     float matrix[N];
-            *z = find_cpu_usage(T);
-            if(*z < 0) *z = -*z;
+    *z = find_cpu_usage(T);
+    if(*z < 0) *z = -*z;
     char info_array[N][1024];
     for(int i = 0; i < N; i++){
         strcpy(info_array[i], "\n");
@@ -853,6 +854,9 @@ void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
         strcpy(store[i], "\n");
     }
     for(int i = 0; i < N; i++){
+        if (pipe(memory_fd) == -1 || pipe(session_fd) == -1 || pipe(cpu_fd) == -1) {
+            perror("pipe");
+            return;}
         printf("\033[2J"); // Clear the screen
         printf("\033[%d;%dH", 0, 0); // Move cursor back to top-left corner
         printf("Nbr of samples: %d -- every %d secs\n", N, T);
@@ -862,34 +866,119 @@ void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
         printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");  
 
         //Returns the memory used in Phys.Used/Tot -- Virtual Used/Tot format
-        get_cpu_utilization(N, T, info_array, i, matrix);
-
-        for(int i = 0; i < N; i++){
-            printf("%s", info_array[i]);}}
-        if(user == 1 && system == 1){{
-        printf("---------------------------------------\n");
-        printf("### Memory ### (Phys.Used/Tot -- Virtual Used/Tot)\n");  
-
-        //Returns the memory used in Phys.Used/Tot -- Virtual Used/Tot format
-        get_cpu_utilization(N, T, info_array, i, matrix);
-
-        for(int i = 0; i < N; i++){
-            printf("%s", info_array[i]);}}  
+        //FORK 1
+        // Memory usage process
+        pid_t pid_mem = fork();
+        if (pid_mem == 0) {
+            close(memory_fd[1]); // close the write end of the pipe
+            // Child process for memory usage
+            int mem_usage = memory_usage();
+            // Store the value of i as the element at index i in info_array
+            // get_cpu_utilization_2(N, T, info_array, i);
+            // strcpy(temp, info_array[i]);
+            char buf[1024];
+            ssize_t n = read(memory_fd[0], buf, sizeof(buf)); // read from the pipe
+            strcpy(info_array[i], buf);
+            for(int k = 0; k < N; k++){
+                printf("%s", info_array[k]);
+            }
+            if (n == -1) {
+                perror("read");
+                exit(1);
+            }
+            close(memory_fd[0]); // close the read end of the pipe
+            exit(0);
+        } else if (pid_mem < 0) {
+            // Error occurred
+            perror("fork");
+            exit(1);
+        } else {
+            // Parent process
+            close(memory_fd[0]); // close the read end of the pipe
+            get_cpu_utilization(N, T, info_array, i, matrix);
+            strcpy(temp, info_array[i]);
+            ssize_t n = write(memory_fd[1], temp, sizeof(temp)); // write to the pipe
+            if (n == -1) {
+                perror("write");
+                exit(1);
+            }
+            close(memory_fd[1]); // close the write end of the pipe
         }
+            }
 
         //Session/user information part
         /*
         Returns the information about all the user and the sessions  for this machine
         */
-       if(system == 0 && user == 1){
-        get_session_info();}
+       if((system == 0 && user == 1) || (user == 1 && system == 1)){
+        pid_t pid_sess = fork();
+        if (pid_sess == 0) {
+            // Child process for user session information
+            close(session_fd[1]); // close the write end of the pipe
+            char buf[1024];
+            ssize_t n = read(session_fd[0], buf, sizeof(buf)); // read from the pipe
+            printf("%s", buf);
+            close(session_fd[0]); // close the read end of the pipe
+            exit(0);
+        } else if (pid_sess < 0) {
+            // Error occurred
+            perror("fork");
+            exit(1);
+        }
+        else{
+            close(session_fd[0]);
+            char cpu[2][1024];
+            strcpy(cpu[0], "");
+            strcpy(cpu[1], "");
+            get_session_info2(cpu);
+            char x[1024];
+            strcpy(x, "");
+            strcpy(x, cpu[0]);
+            ssize_t n = write(session_fd[1], x, sizeof(x)); // write to the pipe
+            if (n == -1) {
+                perror("write");
+            }
+            close(session_fd[1]); // close the write end of the pipe
+        }
+        waitpid(pid_sess, &status, 0);
+        }
        if(system == 1 && user == 1){
-        get_session_info();}
+        pid_t pid_sess = fork();
+        if (pid_sess == 0) {
+            // Child process for user session information
+            close(session_fd[1]); // close the write end of the pipe
+            char buf[1024];
+            ssize_t n = read(session_fd[0], buf, sizeof(buf)); // read from the pipe
+            printf("%s", buf);
+            close(session_fd[0]); // close the read end of the pipe
+            exit(0);
+        } else if (pid_sess < 0) {
+            // Error occurred
+            perror("fork");
+            exit(1);
+        }
+        else{
+            waitpid(pid_sess, NULL, 0);
+            close(session_fd[0]);
+            char cpu[2][1024];
+            strcpy(cpu[0], "");
+            strcpy(cpu[1], "");
+            get_session_info2(cpu);
+            char x[1024];
+            strcpy(x, "");
+            strcpy(x, cpu[0]);
+            strcat(x, "--------------------------------------\n");
+            ssize_t n = write(session_fd[1], x, sizeof(x)); // write to the pipe
+            if (n == -1) {
+                perror("write");
+            }
+            close(session_fd[1]); // close the write end of the pipe
+        }
+        waitpid(pid_sess, &status, 0);
+        }
         
-        //Core number and CPU usage part
-        /*
-        Returns the number of cores present in our machine 
-        */
+        wait(NULL);
+        
         number_of_cores();
 
         /*
@@ -935,15 +1024,15 @@ void call_graphic(int N, int T, int user, int system, int sequence, int graphic)
         strcpy(store[i], x);
 
         //Itteration through every itteration where cpu usage of every itteration is stored
-        for(int y = 0; y < i; y++){
+        for(int y = 0; y <= i; y++){
         printf("%s", store[y]);}
         
         /*
         Returns the total cpu usage for the system
         */
         *z = find_cpu_usage(T);
+        usleep(T * 500000); // sleep for half a second
     }
-
     //System Information part
     /*
     Return the information about the machine's name, version, release and achitecture 
