@@ -13,7 +13,7 @@
 
 void return_system_information(){
     /*
-    Return the information about the machine's name, version, release and achitecture 
+    Return vaulable information about the machine's name, version, release and achitecture 
     The <sys/utsname.h> header shall define the structure utsname which shall include at least the following members:
     sysname, nodename, release, version and machine which gives information about system information
     Documentation source: https://pubs.opengroup.org/onlinepubs/009695399/basedefs/sys/utsname.h.html
