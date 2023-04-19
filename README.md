@@ -3,7 +3,7 @@
 It is a command-line program that monitors system information such as CPU and memory usage, and displays it to the user. It also provides the ability to sort and filter this information based on various parameters.
 
 ### Table of Contents
-System Requirements
+System Requirements for Project
 Installation
 Usage
 Contribution
