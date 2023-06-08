@@ -255,8 +255,6 @@ void cal_per(float a, float b, char *new){
 
 void get_cpu_utilization(int N, int T, char array[N][1024], int index, float matrix[N]){  
     /*
-    ### For graphic CPU utilization output
-	### intended to see the increament and decreament signs
     It's gives the total cpu usage by aall the cores combined
     It's given by in-class formula
     	Representation: (Phys.Used/Tot -- Virtual Used/Tot)
